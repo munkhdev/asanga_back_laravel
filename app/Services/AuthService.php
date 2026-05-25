@@ -424,7 +424,7 @@ class AuthService
 
         $user = $query->first();
 
-        if (!$user || !Hash::check($password, (string) $user->password)) {
+        if (!$user || !$this->isPasswordValidForUser($user, $password)) {
             throw ValidationException::withMessages([
                 'credentials' => ['Invalid credentials.'],
             ]);
@@ -438,6 +438,24 @@ class AuthService
                 'user' => $user->toArray(),
             ],
         ];
+    }
+
+    private function isPasswordValidForUser(User $user, string $plainPassword): bool
+    {
+        $storedHash = trim((string) ($user->password ?? ''));
+        if ($storedHash === '') {
+            return false;
+        }
+
+        try {
+            return Hash::check($plainPassword, $storedHash);
+        } catch (\Throwable $e) {
+            Log::warning('User password hash check failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+            return false;
+        }
     }
 
     public function loginWithGoogle(string $idToken): array
