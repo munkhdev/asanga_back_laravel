@@ -9,11 +9,13 @@ use App\Models\User;
 use Illuminate\Support\Carbon;
 use Illuminate\Support\Facades\Http;
 use Illuminate\Support\Facades\Hash;
-use Illuminate\Support\Str;
+use Illuminate\Support\Facades\Log;
 use Illuminate\Validation\ValidationException;
 
 class AuthService
 {
+    private const VERIFY_BASE_URL = 'https://api.verify.mn';
+
     public function requestRegisterOtp(array $payload): array
     {
         $email = strtolower(trim((string) ($payload['email'] ?? '')));
@@ -33,7 +35,10 @@ class AuthService
 
         $ttl = max(60, (int) env('OTP_TTL_SECONDS', 180));
         $otp = str_pad((string) random_int(0, 9999), 4, '0', STR_PAD_LEFT);
-        $verifySessionId = (string) Str::uuid();
+        $verifySession = $this->createVerifySession($phone, $otp);
+        $verifySessionId = (string) ($verifySession['sessionId'] ?? '');
+        $expiresAt = $this->resolveVerifyExpiry($verifySession, $ttl);
+        $displayInstruction = trim((string) ($verifySession['displayInstruction'] ?? ''));
 
         $pending = PendingRegistration::query()->create([
             'first_name' => trim((string) ($payload['first_name'] ?? $payload['firstName'] ?? 'User')),
@@ -43,10 +48,10 @@ class AuthService
             'password_hash' => Hash::make((string) ($payload['password'] ?? '')),
             'role' => (string) ($payload['role'] ?? 'user'),
             'otp' => $otp,
-            'otp_expires_at' => now()->addSeconds($ttl),
+            'otp_expires_at' => $expiresAt,
             'verify_session_id' => $verifySessionId,
             'verify_callback_status' => 'pending',
-            'verify_instruction' => 'verify-mn-pending',
+            'verify_instruction' => $displayInstruction !== '' ? $displayInstruction : 'verify-mn-pending',
             'status' => 'pending',
         ]);
 
@@ -54,8 +59,8 @@ class AuthService
             'registrationId' => (string) $pending->id,
             'sessionId' => $verifySessionId,
             'expiresAt' => optional($pending->otp_expires_at)->toISOString(),
-            // For dev/testing parity until SMS provider wiring is added.
-            'otp' => $otp,
+            'displayInstruction' => $pending->verify_instruction,
+            'smsUri' => $verifySession['smsUri'] ?? null,
         ];
     }
 
@@ -184,7 +189,7 @@ class AuthService
 
     public function handleVerifyMnCallback(array $payload): array
     {
-        $sessionId = trim((string) ($payload['sessionId'] ?? ''));
+        $sessionId = trim((string) ($payload['sessionId'] ?? $payload['session_id'] ?? $payload['sessionid'] ?? ''));
         if ($sessionId === '') {
             return ['ok' => true];
         }
@@ -200,6 +205,100 @@ class AuthService
         }
 
         return ['ok' => true];
+    }
+
+    private function createVerifySession(string $phone, string $otp): array
+    {
+        $apiKey = trim((string) env('VERIFY_MN_API_KEY', ''));
+        if ($apiKey === '') {
+            throw ValidationException::withMessages([
+                'phone' => ['VERIFY_MN_API_KEY тохиргоо дутуу байна.'],
+            ]);
+        }
+
+        if (!preg_match('/^\d{8,16}$/', $phone)) {
+            throw ValidationException::withMessages([
+                'phone' => ['Утасны дугаар буруу байна.'],
+            ]);
+        }
+
+        $payload = [
+            'phone' => $phone,
+            'text' => $otp,
+            'responseSms' => 'Амжилттай баталгаажууллаа.',
+        ];
+
+        $callbackUrl = trim((string) env('VERIFY_MN_CALLBACK_URL', ''));
+        if ($callbackUrl !== '') {
+            $payload['callback'] = $callbackUrl;
+        }
+
+        try {
+            $response = Http::timeout(20)
+                ->acceptJson()
+                ->withToken($apiKey)
+                ->post(self::VERIFY_BASE_URL . '/sessions', $payload);
+        } catch (\Throwable $e) {
+            Log::warning('Verify.mn request failed', [
+                'message' => $e->getMessage(),
+                'phone' => $phone,
+            ]);
+
+            throw ValidationException::withMessages([
+                'phone' => ['Verify.mn холболт амжилтгүй боллоо.'],
+            ]);
+        }
+
+        if ($response->failed()) {
+            Log::warning('Verify.mn session create failed', [
+                'status' => $response->status(),
+                'body' => $response->body(),
+                'phone' => $phone,
+            ]);
+
+            $message = (string) (
+                $response->json('message')
+                ?? $response->json('error')
+                ?? 'Verify.mn session үүсгэхэд алдаа гарлаа.'
+            );
+
+            throw ValidationException::withMessages([
+                'phone' => [$message],
+            ]);
+        }
+
+        $data = (array) $response->json();
+        $sessionId = trim((string) ($data['sessionId'] ?? ''));
+        if ($sessionId === '') {
+            throw ValidationException::withMessages([
+                'phone' => ['Verify.mn sessionId ирсэнгүй.'],
+            ]);
+        }
+
+        return [
+            'sessionId' => $sessionId,
+            'expiresAt' => $data['expiresAt'] ?? null,
+            'displayInstruction' => $data['displayInstruction'] ?? null,
+            'smsUri' => $data['smsUri'] ?? null,
+        ];
+    }
+
+    private function resolveVerifyExpiry(array $verifySession, int $fallbackTtl): Carbon
+    {
+        $raw = trim((string) ($verifySession['expiresAt'] ?? ''));
+
+        if ($raw !== '') {
+            try {
+                $parsed = Carbon::parse($raw);
+                if ($parsed->isFuture()) {
+                    return $parsed;
+                }
+            } catch (\Throwable $e) {
+                // fallback to local TTL
+            }
+        }
+
+        return now()->addSeconds($fallbackTtl);
     }
 
     public function register(array $payload): array

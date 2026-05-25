@@ -58,9 +58,17 @@ class AuthController extends Controller
 
     public function verifyMnCallback(Request $request): JsonResponse
     {
-        $payload = $request->validate([
-            'sessionId' => ['nullable', 'string'],
-        ]);
+        $payload = [
+            'sessionId' => (string) (
+                $request->query('sessionId')
+                ?? $request->query('session_id')
+                ?? $request->query('sessionid')
+                ?? $request->input('sessionId')
+                ?? $request->input('session_id')
+                ?? $request->input('sessionid')
+                ?? ''
+            ),
+        ];
 
         $result = $this->auth->handleVerifyMnCallback($payload);
         return ApiResponse::success($result);
