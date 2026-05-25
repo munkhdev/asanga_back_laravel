@@ -173,6 +173,40 @@ class AuthService
             ]);
         }
 
+        $sessionStatus = 'PENDING';
+
+        if ($pending->status === 'pending' && $pending->verify_session_id) {
+            $session = $this->fetchVerifySessionStatus((string) $pending->verify_session_id);
+            if ($session) {
+                $sessionStatus = strtoupper((string) ($session['sessionStatus'] ?? 'PENDING'));
+                $callbackStatus = strtoupper((string) ($session['callbackStatus'] ?? 'PENDING'));
+
+                $instruction = trim((string) ($session['displayInstruction'] ?? ''));
+                if ($instruction !== '') {
+                    $pending->verify_instruction = $instruction;
+                }
+
+                $sessionExpiresAt = trim((string) ($session['expiresAt'] ?? ''));
+                if ($sessionExpiresAt !== '') {
+                    try {
+                        $pending->otp_expires_at = Carbon::parse($sessionExpiresAt);
+                    } catch (\Throwable $e) {
+                        // keep existing expiration if provider value is malformed
+                    }
+                }
+
+                if ($sessionStatus === 'VERIFIED' || $callbackStatus === 'COMPLETED') {
+                    $pending->verify_callback_status = 'completed';
+                }
+
+                if ($sessionStatus === 'EXPIRED' && $pending->status === 'pending') {
+                    $pending->status = 'expired';
+                }
+
+                $pending->save();
+            }
+        }
+
         if ($pending->otp_expires_at instanceof Carbon && $pending->otp_expires_at->isPast() && $pending->status === 'pending') {
             $pending->status = 'expired';
             $pending->save();
@@ -182,6 +216,7 @@ class AuthService
             'registrationId' => (string) $pending->id,
             'status' => strtoupper((string) $pending->status),
             'callbackStatus' => strtoupper((string) ($pending->verify_callback_status ?? 'pending')),
+            'sessionStatus' => $sessionStatus,
             'displayInstruction' => (string) ($pending->verify_instruction ?? ''),
             'expiresAt' => optional($pending->otp_expires_at)->toISOString(),
         ];
@@ -227,7 +262,7 @@ class AuthService
             'text' => $otp,
         ];
 
-        $responseSms = trim((string) env('VERIFY_MN_RESPONSE_SMS', 'Verification successful.'));
+        $responseSms = trim((string) env('VERIFY_MN_RESPONSE_SMS', 'Amjilttai batalgaajlaa.'));
         if ($responseSms !== '') {
             // Verify.mn accepts ASCII-only response text.
             $payload['responseSms'] = preg_replace('/[^\x20-\x7E]/', '', $responseSms) ?: 'Amjilttai batalgaajlaa.';
@@ -304,6 +339,38 @@ class AuthService
         }
 
         return now()->addSeconds($fallbackTtl);
+    }
+
+    private function fetchVerifySessionStatus(string $sessionId): ?array
+    {
+        $apiKey = trim((string) env('VERIFY_MN_API_KEY', ''));
+        if ($apiKey === '' || $sessionId === '') {
+            return null;
+        }
+
+        try {
+            $response = Http::timeout(15)
+                ->acceptJson()
+                ->withToken($apiKey)
+                ->get(self::VERIFY_BASE_URL . '/sessions/' . rawurlencode($sessionId));
+
+            if ($response->failed()) {
+                Log::warning('Verify.mn session status fetch failed', [
+                    'status' => $response->status(),
+                    'body' => $response->body(),
+                    'sessionId' => $sessionId,
+                ]);
+                return null;
+            }
+
+            return (array) $response->json();
+        } catch (\Throwable $e) {
+            Log::warning('Verify.mn session status request failed', [
+                'message' => $e->getMessage(),
+                'sessionId' => $sessionId,
+            ]);
+            return null;
+        }
     }
 
     public function register(array $payload): array
