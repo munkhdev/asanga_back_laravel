@@ -1,5 +1,5 @@
 <?php
-
+// hidden file, only for reference
 declare(strict_types=1);
 
 namespace App\Support;
