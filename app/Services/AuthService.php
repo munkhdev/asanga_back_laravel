@@ -100,7 +100,7 @@ class AuthService
                 ->first();
 
             if ($user) {
-                $token = $user->createToken('api')->plainTextToken;
+                $token = $this->createApiToken($user);
                 return [
                     'token' => $token,
                     'user' => $user->toArray(),
@@ -155,7 +155,7 @@ class AuthService
         $pending->verify_callback_status = 'completed';
         $pending->save();
 
-        $token = $user->createToken('api')->plainTextToken;
+        $token = $this->createApiToken($user);
 
         return [
             'token' => $token,
@@ -400,7 +400,7 @@ class AuthService
             'is_verified' => true,
         ]);
 
-        $token = $user->createToken('api')->plainTextToken;
+        $token = $this->createApiToken($user);
 
         return [
             'data' => [
@@ -430,7 +430,7 @@ class AuthService
             ]);
         }
 
-        $token = $user->createToken('api')->plainTextToken;
+        $token = $this->createApiToken($user);
 
         return [
             'data' => [
@@ -592,5 +592,25 @@ class AuthService
                 'user' => $user->toArray(),
             ],
         ];
+    }
+
+    private function createApiToken(User $user): string
+    {
+        try {
+            return $user->createToken('api')->plainTextToken;
+        } catch (\Throwable $e) {
+            Log::error('Auth token creation failed', [
+                'user_id' => $user->id,
+                'message' => $e->getMessage(),
+            ]);
+
+            $message = str_contains(strtolower($e->getMessage()), 'personal_access_tokens')
+                ? 'Auth token table байхгүй эсвэл эвдэрсэн байна. Sanctum migration ажиллуулна уу.'
+                : 'Нэвтрэх токен үүсгэх үед алдаа гарлаа.';
+
+            throw ValidationException::withMessages([
+                'auth' => [$message],
+            ]);
+        }
     }
 }
