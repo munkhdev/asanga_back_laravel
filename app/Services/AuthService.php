@@ -405,7 +405,7 @@ class AuthService
         return [
             'data' => [
                 'token' => $token,
-                'user' => $user->toArray(),
+                'user' => $this->safeUserPayload($user),
             ],
         ];
     }
@@ -435,7 +435,7 @@ class AuthService
         return [
             'data' => [
                 'token' => $token,
-                'user' => $user->toArray(),
+                'user' => $this->safeUserPayload($user),
             ],
         ];
     }
@@ -602,14 +602,43 @@ class AuthService
             $user->save();
         }
 
-        $token = $user->createToken('api')->plainTextToken;
+        $token = $this->createApiToken($user);
 
         return [
             'data' => [
                 'token' => $token,
-                'user' => $user->toArray(),
+                'user' => $this->safeUserPayload($user),
             ],
         ];
+    }
+
+    private function safeUserPayload(User $user): array
+    {
+        return $this->sanitizeUtf8($user->toArray());
+    }
+
+    private function sanitizeUtf8(mixed $value): mixed
+    {
+        if (is_array($value)) {
+            foreach ($value as $k => $v) {
+                $value[$k] = $this->sanitizeUtf8($v);
+            }
+            return $value;
+        }
+
+        if (!is_string($value)) {
+            return $value;
+        }
+
+        if (@preg_match('//u', $value) === 1) {
+            return $value;
+        }
+
+        if (function_exists('mb_convert_encoding')) {
+            return (string) mb_convert_encoding($value, 'UTF-8', 'UTF-8');
+        }
+
+        return iconv('UTF-8', 'UTF-8//IGNORE', $value) ?: '';
     }
 
     private function createApiToken(User $user): string
