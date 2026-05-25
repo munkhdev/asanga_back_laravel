@@ -66,6 +66,12 @@ class AuthController extends Controller
         return ApiResponse::success($result);
     }
 
+    public function registerStatus(string $registrationId): JsonResponse
+    {
+        $result = $this->auth->registerStatus($registrationId);
+        return ApiResponse::success($result);
+    }
+
     public function login(Request $request): JsonResponse
     {
         $payload = $request->validate([

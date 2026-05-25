@@ -112,6 +112,12 @@ class AuthService
             ]);
         }
 
+        if ($otp === '' && $pending->verify_callback_status !== 'completed') {
+            throw ValidationException::withMessages([
+                'otp' => ['Баталгаажуулалтын callback ирээгүй байна.'],
+            ]);
+        }
+
         if ($otp !== '' && $pending->otp !== $otp) {
             throw ValidationException::withMessages([
                 'otp' => ['OTP буруу байна'],
@@ -149,6 +155,30 @@ class AuthService
         return [
             'token' => $token,
             'user' => $user->toArray(),
+        ];
+    }
+
+    public function registerStatus(string $registrationId): array
+    {
+        /** @var PendingRegistration|null $pending */
+        $pending = PendingRegistration::query()->find($registrationId);
+        if (!$pending) {
+            throw ValidationException::withMessages([
+                'registrationId' => ['Registration not found.'],
+            ]);
+        }
+
+        if ($pending->otp_expires_at instanceof Carbon && $pending->otp_expires_at->isPast() && $pending->status === 'pending') {
+            $pending->status = 'expired';
+            $pending->save();
+        }
+
+        return [
+            'registrationId' => (string) $pending->id,
+            'status' => strtoupper((string) $pending->status),
+            'callbackStatus' => strtoupper((string) ($pending->verify_callback_status ?? 'pending')),
+            'displayInstruction' => (string) ($pending->verify_instruction ?? ''),
+            'expiresAt' => optional($pending->otp_expires_at)->toISOString(),
         ];
     }
 

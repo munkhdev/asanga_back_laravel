@@ -34,6 +34,7 @@ Route::get('/products/{id}', [ProductController::class, 'show']);
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/register-email', [AuthController::class, 'registerWithEmail']);
 Route::post('/auth/register/verify-otp', [AuthController::class, 'verifyRegisterOtp']);
+Route::get('/auth/register/status/{registrationId}', [AuthController::class, 'registerStatus']);
 Route::get('/auth/verify-mn/callback', [AuthController::class, 'verifyMnCallback']);
 Route::post('/auth/login', [AuthController::class, 'login']);
 Route::post('/auth/google', [AuthController::class, 'google']);
@@ -97,6 +98,7 @@ Route::prefix('v1')->group(function (): void {
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/register-email', [AuthController::class, 'registerWithEmail']);
     Route::post('/auth/register/verify-otp', [AuthController::class, 'verifyRegisterOtp']);
+    Route::get('/auth/register/status/{registrationId}', [AuthController::class, 'registerStatus']);
     Route::get('/auth/verify-mn/callback', [AuthController::class, 'verifyMnCallback']);
     Route::post('/auth/login', [AuthController::class, 'login']);
     Route::post('/auth/google', [AuthController::class, 'google']);
