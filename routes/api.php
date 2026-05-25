@@ -5,11 +5,13 @@ declare(strict_types=1);
 use Illuminate\Support\Facades\Route;
 use App\Http\Controllers\Api\OrderController;
 use App\Http\Controllers\Api\AuthController;
+use App\Http\Controllers\Api\BannerController;
 use App\Http\Controllers\Api\QpayController;
 use App\Http\Controllers\Api\UserController;
 use App\Http\Controllers\Api\CategoryController;
 use App\Http\Controllers\Api\ProductController;
 use App\Http\Controllers\Api\OrganizationController;
+use App\Http\Controllers\Api\Admin\BannerAdminController;
 use App\Http\Controllers\Api\Admin\AdminOrderController;
 use App\Http\Controllers\Api\Admin\DashboardController;
 use App\Http\Controllers\Api\Admin\CategoryAdminController;
@@ -30,6 +32,7 @@ Route::get('/products/customer', [ProductController::class, 'customer']);
 Route::get('/products/customer/{id}', [ProductController::class, 'show']);
 Route::get('/products/artist', [ProductController::class, 'artist']);
 Route::get('/products/{id}', [ProductController::class, 'show']);
+Route::get('/banners', [BannerController::class, 'index']);
 
 Route::post('/auth/register', [AuthController::class, 'register']);
 Route::post('/auth/register-email', [AuthController::class, 'registerWithEmail']);
@@ -69,6 +72,11 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::patch('/admin/products/{id}', [ProductAdminController::class, 'update']);
     Route::delete('/admin/products/{id}', [ProductAdminController::class, 'destroy']);
 
+    Route::get('/admin/banners', [BannerAdminController::class, 'index']);
+    Route::post('/admin/banners', [BannerAdminController::class, 'store']);
+    Route::patch('/admin/banners/{id}', [BannerAdminController::class, 'update']);
+    Route::delete('/admin/banners/{id}', [BannerAdminController::class, 'destroy']);
+
     Route::get('/admin/orders', [AdminOrderController::class, 'index']);
     Route::get('/admin/orders/{id}', [AdminOrderController::class, 'show']);
     Route::patch('/admin/orders/{id}', [AdminOrderController::class, 'update']);
@@ -94,6 +102,7 @@ Route::prefix('v1')->group(function (): void {
     Route::get('/products/customer/{id}', [ProductController::class, 'show']);
     Route::get('/products/artist', [ProductController::class, 'artist']);
     Route::get('/products/{id}', [ProductController::class, 'show']);
+    Route::get('/banners', [BannerController::class, 'index']);
 
     Route::post('/auth/register', [AuthController::class, 'register']);
     Route::post('/auth/register-email', [AuthController::class, 'registerWithEmail']);
@@ -132,6 +141,11 @@ Route::prefix('v1')->group(function (): void {
         Route::get('/admin/products/{id}', [ProductAdminController::class, 'show']);
         Route::patch('/admin/products/{id}', [ProductAdminController::class, 'update']);
         Route::delete('/admin/products/{id}', [ProductAdminController::class, 'destroy']);
+
+        Route::get('/admin/banners', [BannerAdminController::class, 'index']);
+        Route::post('/admin/banners', [BannerAdminController::class, 'store']);
+        Route::patch('/admin/banners/{id}', [BannerAdminController::class, 'update']);
+        Route::delete('/admin/banners/{id}', [BannerAdminController::class, 'destroy']);
 
         Route::get('/admin/orders', [AdminOrderController::class, 'index']);
         Route::get('/admin/orders/{id}', [AdminOrderController::class, 'show']);
