@@ -225,8 +225,13 @@ class AuthService
         $payload = [
             'phone' => $phone,
             'text' => $otp,
-            'responseSms' => 'Амжилттай баталгаажууллаа.',
         ];
+
+        $responseSms = trim((string) env('VERIFY_MN_RESPONSE_SMS', 'Verification successful.'));
+        if ($responseSms !== '') {
+            // Verify.mn accepts ASCII-only response text.
+            $payload['responseSms'] = preg_replace('/[^\x20-\x7E]/', '', $responseSms) ?: 'Amjilttai batalgaajlaa.';
+        }
 
         $callbackUrl = trim((string) env('VERIFY_MN_CALLBACK_URL', ''));
         if ($callbackUrl !== '') {
