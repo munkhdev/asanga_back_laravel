@@ -26,11 +26,20 @@ return Application::configure(basePath: dirname(__DIR__))
                 return null;
             }
 
+            $errors = $e->errors();
+            $firstError = null;
+            foreach ($errors as $messages) {
+                if (is_array($messages) && isset($messages[0]) && is_string($messages[0]) && $messages[0] !== '') {
+                    $firstError = $messages[0];
+                    break;
+                }
+            }
+
             return ApiResponse::error(
-                message: 'Оролтын өгөгдөл буруу байна',
+                message: $firstError ?: 'Оролтын өгөгдөл буруу байна',
                 status: 422,
                 code: 'VALIDATION_ERROR',
-                errors: $e->errors(),
+                errors: $errors,
             );
         });
 
