@@ -6,6 +6,7 @@ namespace App\Services;
 
 use App\Models\Category;
 use App\Models\Product;
+use Illuminate\Http\UploadedFile;
 use Illuminate\Support\Str;
 use RuntimeException;
 
@@ -60,13 +61,14 @@ class ProductService
         $this->ensureCategoryExists($payload['categoryId'] ?? null);
 
         $slug = $this->makeUniqueSlug((string) ($payload['slug'] ?? $payload['name'] ?? 'product'));
+        $image = $this->resolveImageValue($payload['image'] ?? null);
 
         $item = Product::query()->create([
             'name' => (string) $payload['name'],
             'slug' => $slug,
             'description' => $payload['description'] ?? null,
             'price' => (float) ($payload['price'] ?? 0),
-            'image' => $payload['image'] ?? null,
+            'image' => $image,
             'stock' => (float) ($payload['stock'] ?? 0),
             'unit' => (string) ($payload['unit'] ?? 'piece'),
             'category_id' => $payload['categoryId'] ?? null,
@@ -90,7 +92,11 @@ class ProductService
             $item->price = (float) $payload['price'];
         }
         if (array_key_exists('image', $payload)) {
-            $item->image = $payload['image'];
+            $old = (string) ($item->image ?? '');
+            $item->image = $this->resolveImageValue($payload['image']);
+            if ($item->image !== $old) {
+                $this->deleteLocalUpload($old);
+            }
         }
         if (array_key_exists('stock', $payload)) {
             $item->stock = (float) $payload['stock'];
@@ -114,6 +120,49 @@ class ProductService
         $item->save();
 
         return ['data' => $item->toArray()];
+    }
+
+    private function resolveImageValue(mixed $image): ?string
+    {
+        if ($image instanceof UploadedFile) {
+            return $this->saveUploadedFile($image);
+        }
+
+        if ($image === null) {
+            return null;
+        }
+
+        $value = trim((string) $image);
+        return $value !== '' ? $value : null;
+    }
+
+    private function saveUploadedFile(UploadedFile $file): string
+    {
+        $extension = $file->getClientOriginalExtension();
+        $safeExt = $extension !== '' ? Str::lower($extension) : 'bin';
+        $name = Str::uuid()->toString() . '.' . $safeExt;
+
+        $targetDir = public_path('uploads/products');
+        if (!is_dir($targetDir)) {
+            @mkdir($targetDir, 0775, true);
+        }
+
+        $file->move($targetDir, $name);
+
+        return 'uploads/products/' . $name;
+    }
+
+    private function deleteLocalUpload(string $relativePath): void
+    {
+        $safe = str_replace(['..', '\\'], ['', '/'], trim($relativePath));
+        if ($safe === '' || !str_starts_with($safe, 'uploads/')) {
+            return;
+        }
+
+        $fullPath = public_path($safe);
+        if (is_file($fullPath)) {
+            @unlink($fullPath);
+        }
     }
 
     public function delete(string $id): array

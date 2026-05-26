@@ -43,12 +43,18 @@ class ProductAdminController extends Controller
 
     public function store(Request $request): JsonResponse
     {
+        $this->normalizeBooleanFields($request, ['isActive']);
+
+        $imageRules = $request->hasFile('image')
+            ? ['nullable', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']
+            : ['nullable', 'string'];
+
         $payload = $request->validate([
             'name' => ['required', 'string'],
             'slug' => ['nullable', 'string'],
             'description' => ['nullable', 'string'],
             'price' => ['required', 'numeric', 'min:0'],
-            'image' => ['nullable', 'string'],
+            'image' => $imageRules,
             'stock' => ['nullable', 'numeric', 'min:0'],
             'unit' => ['nullable', 'in:kg,piece'],
             'categoryId' => ['nullable', 'string'],
@@ -61,7 +67,25 @@ class ProductAdminController extends Controller
 
     public function update(Request $request, string $id): JsonResponse
     {
-        $data = $this->products->update($id, $request->all());
+        $this->normalizeBooleanFields($request, ['isActive']);
+
+        $imageRules = $request->hasFile('image')
+            ? ['sometimes', 'file', 'mimes:jpg,jpeg,png,webp,gif', 'max:10240']
+            : ['sometimes', 'nullable', 'string'];
+
+        $payload = $request->validate([
+            'name' => ['sometimes', 'string'],
+            'slug' => ['sometimes', 'nullable', 'string'],
+            'description' => ['sometimes', 'nullable', 'string'],
+            'price' => ['sometimes', 'numeric', 'min:0'],
+            'image' => $imageRules,
+            'stock' => ['sometimes', 'nullable', 'numeric', 'min:0'],
+            'unit' => ['sometimes', 'nullable', 'in:kg,piece'],
+            'categoryId' => ['sometimes', 'nullable', 'string'],
+            'isActive' => ['sometimes', 'boolean'],
+        ]);
+
+        $data = $this->products->update($id, $payload);
         return ApiResponse::success($data['data'] ?? null);
     }
 
@@ -69,5 +93,24 @@ class ProductAdminController extends Controller
     {
         $data = $this->products->delete($id);
         return ApiResponse::success($data['data'] ?? null);
+    }
+
+    private function normalizeBooleanFields(Request $request, array $keys): void
+    {
+        foreach ($keys as $key) {
+            if (!$request->has($key)) {
+                continue;
+            }
+
+            $raw = $request->input($key);
+            if (is_bool($raw)) {
+                continue;
+            }
+
+            $value = filter_var($raw, FILTER_VALIDATE_BOOLEAN, FILTER_NULL_ON_FAILURE);
+            if ($value !== null) {
+                $request->merge([$key => $value]);
+            }
+        }
     }
 }
