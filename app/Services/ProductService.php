@@ -35,7 +35,7 @@ class ProductService
         $paginator = $query->latest('id')->paginate($limit, ['*'], 'page', $page);
 
         return [
-            'data' => $paginator->items(),
+            'data' => array_map(fn (Product $p) => $this->toDto($p), $paginator->items()),
             'meta' => [
                 'page' => $paginator->currentPage(),
                 'limit' => $paginator->perPage(),
@@ -53,7 +53,7 @@ class ProductService
             abort(404);
         }
 
-        return ['data' => $item->toArray()];
+        return ['data' => $this->toDto($item)];
     }
 
     public function create(array $payload): array
@@ -75,7 +75,7 @@ class ProductService
             'is_active' => (bool) ($payload['isActive'] ?? true),
         ]);
 
-        return ['data' => $item->toArray()];
+        return ['data' => $this->toDto($item)];
     }
 
     public function update(string $id, array $payload): array
@@ -119,7 +119,26 @@ class ProductService
 
         $item->save();
 
-        return ['data' => $item->toArray()];
+        return ['data' => $this->toDto($item)];
+    }
+
+    private function toDto(Product $item): array
+    {
+        return [
+            'id' => (string) $item->id,
+            'name' => (string) $item->name,
+            'slug' => (string) $item->slug,
+            'description' => $item->description,
+            'price' => (float) $item->price,
+            'image' => $item->image,
+            'stock' => (float) $item->stock,
+            'unit' => (string) ($item->unit ?? 'piece'),
+            'categoryId' => $item->category_id !== null ? (string) $item->category_id : null,
+            'isActive' => (bool) $item->is_active,
+            'audience' => $item->audience,
+            'createdAt' => optional($item->created_at)?->toISOString(),
+            'updatedAt' => optional($item->updated_at)?->toISOString(),
+        ];
     }
 
     private function resolveImageValue(mixed $image): ?string
@@ -170,7 +189,7 @@ class ProductService
         $item = Product::query()->findOrFail($id);
         $item->delete();
 
-        return ['data' => $item->toArray()];
+        return ['data' => $this->toDto($item)];
     }
 
     private function ensureCategoryExists(mixed $categoryId): void
