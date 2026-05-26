@@ -57,6 +57,7 @@ Route::middleware('auth:sanctum')->group(function (): void {
     Route::delete('/users/{id}', [UserController::class, 'destroy']);
 
     Route::get('/admin/organization', [OrganizationController::class, 'show']);
+    Route::post('/admin/organization', [OrganizationController::class, 'upsert']);
     Route::patch('/admin/organization', [OrganizationController::class, 'upsert']);
     Route::delete('/admin/organization', [OrganizationController::class, 'delete']);
 
@@ -127,6 +128,7 @@ Route::prefix('v1')->group(function (): void {
         Route::delete('/users/{id}', [UserController::class, 'destroy']);
 
         Route::get('/admin/organization', [OrganizationController::class, 'show']);
+        Route::post('/admin/organization', [OrganizationController::class, 'upsert']);
         Route::patch('/admin/organization', [OrganizationController::class, 'upsert']);
         Route::delete('/admin/organization', [OrganizationController::class, 'delete']);
 

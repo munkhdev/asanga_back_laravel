@@ -19,6 +19,9 @@ class Organization extends Model
     ];
 
     protected $casts = [
+        'cover' => 'array',
+        'social' => 'array',
+        'stats' => 'array',
         'shipping_price' => 'float',
     ];
 }
