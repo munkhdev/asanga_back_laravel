@@ -419,7 +419,7 @@ class AuthService
         if (str_contains($identity, '@')) {
             $query->where('email', strtolower($identity));
         } else {
-            $query->where('phone', $identity);
+            $query->whereIn('phone', $this->buildPhoneCandidates($identity));
         }
 
         $user = $query->first();
@@ -456,6 +456,33 @@ class AuthService
             ]);
             return false;
         }
+    }
+
+    private function buildPhoneCandidates(string $raw): array
+    {
+        $raw = trim($raw);
+        $digits = preg_replace('/\D+/', '', $raw) ?? '';
+
+        $candidates = array_values(array_filter(array_unique([
+            $raw,
+            $digits,
+            $digits !== '' ? '+' . $digits : '',
+        ])));
+
+        if (strlen($digits) === 8) {
+            $candidates[] = '976' . $digits;
+            $candidates[] = '+976' . $digits;
+        }
+
+        if (strlen($digits) === 11 && str_starts_with($digits, '976')) {
+            $local = substr($digits, 3);
+            if ($local !== false && $local !== '') {
+                $candidates[] = $local;
+                $candidates[] = '+976' . $local;
+            }
+        }
+
+        return array_values(array_unique(array_filter($candidates)));
     }
 
     public function loginWithGoogle(string $idToken): array
